@@ -1,0 +1,4 @@
+#!/bin/bash
+for i in {000..009}; do
+    patch-extract $HOME/lpr-ocr/uw3-framed-lines.tgz $HOME/lpr-ocr/uw3-patches/uw3-patches-$i.tgz &
+done
