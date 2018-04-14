@@ -19,6 +19,7 @@ assert sys.version_info[0] == 2 and sys.version_info[1] >= 7,\
 
 scripts = """
 ocrorot-train
+ocroskew-train
 """.split()
 
 setup(
