@@ -1,0 +1,181 @@
+#!/usr/bin/python
+import os
+import sys
+import re
+import glob
+import random as pyr
+import os.path
+import argparse
+
+import torch
+import scipy.ndimage as ndi
+import torch.nn.functional as F
+from pylab import *
+from torch import nn, optim, autograd
+from dlinputs import utils
+from dlinputs import gopen
+from dlinputs import filters
+from dlinputs import paths
+from dltrainers import helpers
+from dltrainers import layers
+from dltrainers import flex
+from torch.autograd import Variable
+import matplotlib as mpl
+
+from ocroseg import degrade
+import ocrorot.layers as orlayers
+
+rc("image", cmap="gray")
+ion()
+
+parser = argparse.ArgumentParser("train a page segmenter")
+parser.add_argument("-l", "--lr", default="0,0.1:1e6,0.03:1e7,0.01", help="learning rate or learning rate sequence 'n,lr:n,lr:n,:r'")
+parser.add_argument("-b", "--batchsize", type=int, default=32)
+parser.add_argument("-o", "--output", default="skew", help="prefix for output")
+parser.add_argument("-m", "--model", default=None, help="load model")
+
+parser.add_argument("--arange", default=5.0)
+parser.add_argument("--abuckets", default=30)
+
+parser.add_argument("--save_every", default=1000, type=int, help="how often to save")
+parser.add_argument("--loss_horizon", default=1000, type=int, help="horizon over which to calculate the loss")
+parser.add_argument("--ntrain", type=int, default=-1, help="ntrain starting value")
+parser.add_argument("--random_invert", type=float, default=0.0)
+parser.add_argument("--min_range", type=float, default=0.4)
+
+parser.add_argument("-D", "--makesource", default=None)
+parser.add_argument("-P", "--makepipeline", default=None)
+parser.add_argument("-M", "--makemodel", default=None)
+parser.add_argument("--exec", dest="execute", nargs="*", default=[])
+parser.add_argument("--input", default="/home/tmb/lpr-ocr/uw3-patches/uw3-patches-@010.tgz")
+
+args = parser.parse_args()
+ARGS = {k: v for k, v in args.__dict__.items()}
+
+
+def make_source():
+    return  gopen.open_source(args.input)
+
+
+def make_pipeline():
+
+    def transformer(sample):
+        image = sample["input"]
+        params = sample["params"]
+        arange = args.arange * pi / 180.0
+        alpha = clip(float(params["alpha"]), -arange, arange-0.0001)
+        bucket = int(args.abuckets * (alpha+arange) / (2*arange))
+        assert bucket >= 0 and bucket <= args.abuckets, (bucket, args.abuckets)
+        image = np.expand_dims(image, 2)
+        return dict(input=image, cls=bucket)
+
+    return filters.compose(
+        filters.shuffle(100, 10),
+        filters.rename(input="patch.png", params="params.json"),
+        filters.transform(transformer),
+        filters.batched(args.batchsize))
+
+def make_model():
+    r = 5
+    nf = 8
+    r2 = 5
+    nf2 = 4
+    B, D, H, W = (1, 128), (1, 512), 256, 256
+    model = nn.Sequential(
+        layers.CheckSizes(B, D, H, W),
+        nn.Conv2d(1, nf, r, padding=r//2),
+        nn.BatchNorm2d(nf),
+        nn.ReLU(),
+        orlayers.Spectrum(),
+        nn.Conv2d(nf, nf2, r2, padding=r2//2),
+        nn.BatchNorm2d(nf2),
+        nn.ReLU(),
+        #layers.Info(),
+        layers.Reshape(0, [1, 2, 3]),
+        #layers.Info(),
+        nn.Linear(nf2 * W * H, 128),
+        nn.BatchNorm1d(128),
+        nn.ReLU(),
+        nn.Linear(128, args.abuckets),
+        nn.Sigmoid(),
+        layers.CheckSizes(B, args.abuckets)
+    )
+    return model
+
+if args.makepipeline: execfile(args.makepipeline)
+if args.makesource: execfile(args.makesource)
+if args.makemodel: execfile(args.makemodel)
+for e in args.execute: exec args.execute
+
+source = make_source()
+sample = source.next()
+utils.print_sample(sample)
+pipeline = make_pipeline()
+source = pipeline(source)
+sample = source.next()
+utils.print_sample(sample)
+
+if args.model:
+    model = torch.load(args.model)
+    ntrain, _ = paths.parse_save_path(args.model)
+else:
+    model = make_model()
+    ntrain = 0
+model.cuda()
+if args.ntrain >= 0: ntrain = args.ntrain
+print "ntrain", ntrain
+print model
+
+start_count = 0
+
+criterion = nn.MSELoss()
+criterion.cuda()
+
+losses = [1.0]
+
+def train_batch(model, image, cls, nclasses=4, lr=1e-3):
+    cuinput = torch.FloatTensor(image.transpose(0, 3, 1, 2)).cuda()
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0)
+    optimizer.zero_grad()
+    cuoutput = model(Variable(cuinput))
+    b, d = cuoutput.size()
+    target = torch.zeros(len(cls), args.abuckets)
+    for i, c in enumerate(cls): target[i, c] = 1
+    cutarget = Variable(target.cuda())
+    loss = criterion(cuoutput, cutarget)
+    loss.backward()
+    optimizer.step()
+    return loss.data.cpu().numpy()[0], helpers.asnd(cuoutput)
+
+losses = []
+rates = helpers.LearningRateSchedule(args.lr)
+nbatches = 0
+for sample in source:
+    image = sample["input"]
+    cls = sample["cls"]
+    lr = rates(ntrain)
+    loss, output = train_batch(model, image, cls, nclasses=4, lr=lr)
+    try:
+        pass
+    except Exception, e:
+        utils.print_sample(sample)
+        print e
+        continue
+    losses.append(loss)
+    if nbatches % 10 == 0:
+        print nbatches, ntrain, loss, np.amin(output), np.amax(output), "lr", lr,
+        print argmax(output[0]), cls[0]
+    if nbatches>0 and nbatches%args.save_every==0:
+        err = float(np.mean(losses[-args.save_every:]))
+        fname = paths.make_save_path(args.output, ntrain, err)
+        torch.save(model, fname)
+        print "saved", fname
+    if nbatches % 100 == 0:
+        clf()
+        subplot(121); imshow(image[0,:,:,0], vmin=0, vmax=1)
+        subplot(122); plot(output[0])
+        draw()
+        ginput(1, 1e-3)
+    waitforbuttonpress(0.0001)
+    nbatches += 1
+    ntrain += len(image)
