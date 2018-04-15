@@ -34,8 +34,11 @@ parser.add_argument("-b", "--batchsize", type=int, default=32)
 parser.add_argument("-o", "--output", default="skew", help="prefix for output")
 parser.add_argument("-m", "--model", default=None, help="load model")
 
-parser.add_argument("--arange", default=5.0)
-parser.add_argument("--abuckets", default=30)
+parser.add_argument("--arange", type=float, default=5.0)
+parser.add_argument("--abuckets", type=int, default=50)
+parser.add_argument("--prefilter", type=float, default=0.0)
+parser.add_argument("-i", "--invert", action="store_true")
+parser.add_argument("-N", "--normalize", action="store_true")
 
 parser.add_argument("--save_every", default=1000, type=int, help="how often to save")
 parser.add_argument("--loss_horizon", default=1000, type=int, help="horizon over which to calculate the loss")
@@ -61,6 +64,15 @@ def make_pipeline():
 
     def transformer(sample):
         image = sample["input"]
+        assert amin(image) >= 0
+        assert amax(image) <= 1.0
+        if args.prefilter > 0:
+            image -= ndi.gaussian_filter(image, args.prefilter)
+        if args.invert:
+            image = 1.0 - image
+        if args.normalize:
+            image -= amin(image)
+            image /= amax(image)
         params = sample["params"]
         arange = args.arange * pi / 180.0
         alpha = clip(float(params["alpha"]), -arange, arange-0.0001)
@@ -168,6 +180,7 @@ for sample in source:
     if nbatches>0 and nbatches%args.save_every==0:
         err = float(np.mean(losses[-args.save_every:]))
         fname = paths.make_save_path(args.output, ntrain, err)
+        model.ARGS = ARGS
         torch.save(model, fname)
         print "saved", fname
     if nbatches % 100 == 0:
