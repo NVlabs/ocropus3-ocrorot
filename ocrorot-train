@@ -41,7 +41,7 @@ parser.add_argument("-D", "--makesource", default=None)
 parser.add_argument("-P", "--makepipeline", default=None)
 parser.add_argument("-M", "--makemodel", default=None)
 parser.add_argument("--exec", dest="execute", nargs="*", default=[])
-parser.add_argument("--input", default="/home/tmb/lpr-ocr/uw3-patches/uw3-patches-@010.tgz")
+parser.add_argument("--input", default="/home/tmb/tmb-ocr/uw3-patches/uw3-patches-@010.tgz")
 
 args = parser.parse_args()
 ARGS = {k: v for k, v in args.__dict__.items()}
@@ -103,6 +103,14 @@ if args.makesource: execfile(args.makesource)
 if args.makemodel: execfile(args.makemodel)
 for e in args.execute: exec args.execute
 
+if args.model:
+    model = torch.load(args.model)
+    ntrain, _ = paths.parse_save_path(args.model)
+else:
+    model = make_model()
+    ntrain = 0
+
+model.cuda()
 source = make_source()
 sample = source.next()
 utils.print_sample(sample)
@@ -111,13 +119,6 @@ source = pipeline(source)
 sample = source.next()
 utils.print_sample(sample)
 
-if args.model:
-    model = torch.load(args.model)
-    ntrain, _ = paths.parse_save_path(args.model)
-else:
-    model = make_model()
-    ntrain = 0
-model.cuda()
 if args.ntrain >= 0: ntrain = args.ntrain
 print "ntrain", ntrain
 print model
