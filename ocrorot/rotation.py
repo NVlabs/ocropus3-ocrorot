@@ -41,7 +41,7 @@ class RotationEstimator(object):
             assert np.amin(binimage) < 0.05
             assert np.amax(binimage) > 0.95
             middle = np.sum(np.minimum(binimage>0.2, binimage<0.8))
-            allowed = 0.05 * np.prod(binimage.shape)
+            allowed = 0.2 * np.prod(binimage.shape)
             assert middle < allowed, (middle, allowed)
         self.patches = get_patches(binimage)
         self.preds = [self.predict(p) for p in self.patches]
