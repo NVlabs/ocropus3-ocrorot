@@ -3,3 +3,4 @@ build
 *~
 *.tgz
 *.pt
+.ipynb_checkpoints
