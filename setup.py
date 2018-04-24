@@ -26,6 +26,8 @@ for model in models:
 scripts = """
 ocrorot-train
 ocroskew-train
+ocrorot-pred
+ocroskew-pred
 """.split()
 
 setup(
