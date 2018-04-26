@@ -33,7 +33,7 @@ reload(ocrorot)
 
 
 
-    <module 'ocrorot' from 'ocrorot/__init__.py'>
+    <module 'ocrorot' from 'ocrorot/__init__.pyc'>
 
 
 
@@ -92,7 +92,7 @@ imshow(image)
 
 
 
-    <matplotlib.image.AxesImage at 0x7f10f6919b90>
+    <matplotlib.image.AxesImage at 0x7f5584f5db90>
 
 
 
@@ -160,6 +160,10 @@ The skew estimator is a fairly unusual model because it propagates through a glo
 sk = ocrorot.SkewEstimator("logskew-000015808-000132.pt")
 sk.model
 ```
+
+    /usr/local/lib/python2.7/dist-packages/torch/serialization.py:325: SourceChangeWarning: source code of class 'ocrorot.layers.Spectrum' has changed. you can retrieve the original source code by accessing the object's source attribute or set `torch.nn.Module.dump_patches = True` and use the patch tool to revert the changes.
+      warnings.warn(msg, SourceChangeWarning)
+
 
 
 
