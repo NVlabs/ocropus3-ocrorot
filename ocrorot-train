@@ -1,39 +1,30 @@
 #!/usr/bin/python
-import os
-import re
-import glob
-import random as pyr
-import os.path
 import argparse
 
 import torch
 import scipy.ndimage as ndi
-import torch.nn.functional as F
 from pylab import *
-from torch import nn, optim, autograd
-from dlinputs import utils
-from dlinputs import gopen
-from dlinputs import filters
-from dlinputs import paths
-from dltrainers import helpers
-from dltrainers import layers
+from torch import nn, optim
+from dlinputs import gopen, paths, utils, filters
+from dltrainers import layers, helpers
 from torch.autograd import Variable
-import matplotlib as mpl
-
-from ocroseg import degrade
 
 rc("image", cmap="gray")
 ion()
 
 parser = argparse.ArgumentParser("train a page segmenter")
-parser.add_argument("-l", "--lr", default="0,0.1:1e4,0.03:1e5,0.01", help="learning rate or learning rate sequence 'n,lr:n,lr:n,:r'")
+parser.add_argument("-l", "--lr", default="0,0.1:1e4,0.03:1e5,0.01",
+                    help="learning rate or learning rate sequence 'n,lr:n,lr:n,:r'")
 parser.add_argument("-b", "--batchsize", type=int, default=64)
 parser.add_argument("-o", "--output", default="rot", help="prefix for output")
 parser.add_argument("-m", "--model", default=None, help="load model")
 
-parser.add_argument("--save_every", default=1000, type=int, help="how often to save")
-parser.add_argument("--loss_horizon", default=1000, type=int, help="horizon over which to calculate the loss")
-parser.add_argument("--ntrain", type=int, default=-1, help="ntrain starting value")
+parser.add_argument("--save_every", default=1000,
+                    type=int, help="how often to save")
+parser.add_argument("--loss_horizon", default=1000, type=int,
+                    help="horizon over which to calculate the loss")
+parser.add_argument("--ntrain", type=int, default=-
+                    1, help="ntrain starting value")
 parser.add_argument("--random_invert", type=float, default=0.0)
 parser.add_argument("--min_range", type=float, default=0.4)
 
@@ -41,14 +32,15 @@ parser.add_argument("-D", "--makesource", default=None)
 parser.add_argument("-P", "--makepipeline", default=None)
 parser.add_argument("-M", "--makemodel", default=None)
 parser.add_argument("--exec", dest="execute", nargs="*", default=[])
-parser.add_argument("--input", default="/home/tmb/tmb-ocr/uw3-patches/uw3-patches-@010.tgz")
+parser.add_argument(
+    "--input", default="/home/tmb/tmb-ocr/uw3-patches/uw3-patches-@010.tgz")
 
 args = parser.parse_args()
 ARGS = {k: v for k, v in args.__dict__.items()}
 
 
 def make_source():
-    return  gopen.open_source(args.input)
+    return gopen.open_source(args.input)
 
 
 def make_pipeline():
@@ -67,6 +59,7 @@ def make_pipeline():
         filters.rename(input="patch.png"),
         filters.transform(transformer),
         filters.batched(args.batchsize))
+
 
 def make_model():
     r = 3
@@ -98,10 +91,15 @@ def make_model():
     )
     return model
 
-if args.makepipeline: execfile(args.makepipeline)
-if args.makesource: execfile(args.makesource)
-if args.makemodel: execfile(args.makemodel)
-for e in args.execute: exec args.execute
+
+if args.makepipeline:
+    execfile(args.makepipeline)
+if args.makesource:
+    execfile(args.makesource)
+if args.makemodel:
+    execfile(args.makemodel)
+for e in args.execute:
+    exec args.execute
 
 if args.model:
     model = torch.load(args.model)
@@ -119,7 +117,8 @@ source = pipeline(source)
 sample = source.next()
 utils.print_sample(sample)
 
-if args.ntrain >= 0: ntrain = args.ntrain
+if args.ntrain >= 0:
+    ntrain = args.ntrain
 print "ntrain", ntrain
 print model
 
@@ -130,19 +129,23 @@ criterion.cuda()
 
 losses = [1.0]
 
+
 def train_batch(model, image, cls, nclasses=4, lr=1e-3):
     cuinput = torch.FloatTensor(image.transpose(0, 3, 1, 2)).cuda()
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0)
+    optimizer = optim.SGD(model.parameters(), lr=lr,
+                          momentum=0.9, weight_decay=0.0)
     optimizer.zero_grad()
     cuoutput = model(Variable(cuinput))
     b, d = cuoutput.size()
     target = torch.zeros(len(cls), nclasses)
-    for i, c in enumerate(cls): target[i, c] = 1
+    for i, c in enumerate(cls):
+        target[i, c] = 1
     cutarget = Variable(target.cuda())
     loss = criterion(cuoutput, cutarget)
     loss.backward()
     optimizer.step()
     return loss.data.cpu().numpy()[0], helpers.asnd(cuoutput)
+
 
 losses = []
 rates = helpers.LearningRateSchedule(args.lr)
@@ -161,7 +164,7 @@ for sample in source:
     losses.append(loss)
     print nbatches, ntrain, loss, np.amin(output), np.amax(output), "lr", lr,
     print output[0], cls[0]
-    if nbatches>0 and nbatches%args.save_every==0:
+    if nbatches > 0 and nbatches % args.save_every == 0:
         err = float(np.mean(losses[-args.save_every:]))
         fname = paths.make_save_path(args.output, ntrain, err)
         torch.save(model, fname)
@@ -169,7 +172,7 @@ for sample in source:
     if nbatches % 10 == 0:
         clf()
         title(str(output[0]))
-        imshow(image[0,:,:,0], vmin=0, vmax=1)
+        imshow(image[0, :, :, 0], vmin=0, vmax=1)
         draw()
         ginput(1, 1e-3)
     waitforbuttonpress(0.0001)

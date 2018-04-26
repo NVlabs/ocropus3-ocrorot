@@ -1,31 +1,17 @@
 #!/usr/bin/python
 
+import random as pyr
+import argparse
+
 import numpy as np
-from matplotlib import *
+import scipy.ndimage as ndi
 from pylab import *
 from scipy import ndimage as ndi
+from dlinputs import gopen, utils
+from matplotlib import *
+
 rc("image", cmap="gray")
 
-import os
-import re
-import glob
-import random as pyr
-import os.path
-import argparse
-import torch
-import scipy.ndimage as ndi
-import torch.nn.functional as F
-from pylab import *
-from torch import nn, optim, autograd
-from dlinputs import utils
-from dlinputs import gopen
-from dlinputs import filters
-from dlinputs import paths
-from dltrainers import helpers
-from dltrainers import layers
-from torch.autograd import Variable
-from ocroseg import degrade
-from dlinputs import gopen, utils
 
 rc("image", cmap="gray")
 ion()
@@ -35,8 +21,10 @@ parser.add_argument("input")
 parser.add_argument("output")
 args = parser.parse_args()
 
+
 def sigmoid(x):
     return 1/(1+exp(-x))
+
 
 def random_trs(translation=0.05, rotation=2.0, scale=0.1, aniso=0.1):
     if not isinstance(translation, (tuple, list)):
@@ -68,6 +56,7 @@ def random_trs(translation=0.05, rotation=2.0, scale=0.1, aniso=0.1):
 
     return f, dict(translation=(dx, dy), alpha=alpha, scale=scale, aniso=aniso)
 
+
 def make_at_scale(shape, scale):
     h, w = shape
     h0, w0 = int(h/scale+1), int(w/scale+1)
@@ -75,8 +64,10 @@ def make_at_scale(shape, scale):
     result = ndi.zoom(data, scale)
     return result[:h, :w]
 
+
 def make_random(shape, lohi, scales, weights=None):
-    if weights is None: weights = [1.0] * len(scales)
+    if weights is None:
+        weights = [1.0] * len(scales)
     result = make_at_scale(shape, scales[0]) * weights[0]
     for s, w in zip(scales, weights):
         result += make_at_scale(shape, s) * w
@@ -87,13 +78,15 @@ def make_random(shape, lohi, scales, weights=None):
     result += lo
     return result
 
+
 def make_all_random(page):
     blur = 3 * rand()
     sep = 0.1+0.2*rand()
     while 1:
         scales = add.accumulate(rand(4))
         scales = 10**scales
-        if scales[-1] < 500: break
+        if scales[-1] < 500:
+            break
     weights = rand(4)
     mask = ndi.gaussian_filter(page, blur)
     mask /= amax(mask)
@@ -101,12 +94,14 @@ def make_all_random(page):
     fg = make_random(page.shape, (0.5+sep, 1.0), scales, weights)
     degraded = mask * bg + (1.0-mask) * fg
     lo, hi = 0.2 * rand(), 0.8 + 0.2*rand()
-    params = dict(blur=blur, sep=sep, clip=(lo, hi), scales=scales, weights=weights)
+    params = dict(blur=blur, sep=sep, clip=(lo, hi),
+                  scales=scales, weights=weights)
     clipped = clip(degraded, lo, hi)
     clipped -= amin(clipped)
     clipped /= amax(clipped)
     shifted = clipped
     return array(shifted, 'f'), params
+
 
 data = gopen.open_source(args.input)
 sink = gopen.open_sink(args.output)
@@ -120,8 +115,10 @@ for sample in data:
     degraded, params = make_all_random(page)
     if args.display:
         suptitle(repr(params))
-        subplot(121); imshow(degraded, vmin=0, vmax=1)
-        subplot(122); imshow(degraded[1500:2000, 1500:2000], vmin=0, vmax=1)
+        subplot(121)
+        imshow(degraded, vmin=0, vmax=1)
+        subplot(122)
+        imshow(degraded[1500:2000, 1500:2000], vmin=0, vmax=1)
         ginput(1, 0.001)
     output = {
         "__key__": sample["__key__"],

@@ -1,11 +1,12 @@
 #!/usr/bin/python
-from pylab import *
-from dlinputs import gopen, utils
-import numpy as np
-from random import randint
-from numpy import random
-from scipy import ndimage as ndi
 import argparse
+from random import randint
+
+from numpy import random
+from pylab import *
+from scipy import ndimage as ndi
+from dlinputs import gopen, utils
+
 rc("image", cmap="gray")
 
 rc("image", cmap="gray")
@@ -20,6 +21,7 @@ bad = set("""
 A002BIN
 """.split())
 
+
 def get_patch(image, center, scale=1.0, alpha=0.0, shape=(256, 256)):
     yx = array(center, 'f')
     hw = array(shape, 'f')
@@ -27,16 +29,19 @@ def get_patch(image, center, scale=1.0, alpha=0.0, shape=(256, 256)):
     offset = yx - dot(m, hw/2.0)
     return ndi.affine_transform(image, m, offset=offset, output_shape=shape, order=1)
 
+
 def get_patches(image, npatches=64, shape=(256, 256), ntrials=1024, minmean=0.02, ralpha=5.0):
     patches = []
     h, w = image.shape
     for i in range(ntrials):
-        if len(patches) >= npatches: break
+        if len(patches) >= npatches:
+            break
         y, x = randint(0, h-1), randint(0, w-1)
         alpha = random.uniform(-ralpha*pi/180, ralpha*pi/180)
         scale = random.uniform(0.7, 1.4)
         patch = get_patch(image, (y, x), alpha=alpha, scale=scale, shape=shape)
-        if mean(patch) < minmean: continue
+        if mean(patch) < minmean:
+            continue
         patches.append((patch, dict(offset=(y, x), alpha=alpha, scale=scale)))
     return patches
 
@@ -45,7 +50,8 @@ data = gopen.sharditerator_once(args.input)
 sink = gopen.open_sink(args.output)
 count = 0
 for sample in data:
-    if sample["__key__"] in bad: continue
+    if sample["__key__"] in bad:
+        continue
     utils.print_sample(sample)
     page = sample["framed.png"]
     patches = get_patches(page)

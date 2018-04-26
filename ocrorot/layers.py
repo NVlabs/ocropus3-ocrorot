@@ -1,27 +1,18 @@
 # Copyright (c) 2017 NVIDIA CORPORATION. All rights reserved.
 # See the LICENSE file for licensing terms (BSD-style).
 
-import numpy as np
 import torch
-from torch import nn
-from torch import autograd
-from torch.autograd import Variable
-from torch.legacy import nn as legnn
-import numpy as np
-import torch
-from torch import nn
-from torch import autograd
-from torch.autograd import Variable
-from torch.legacy import nn as legnn
-import torch.functional as F
-import pytorch_fft.fft as tfft
 import pytorch_fft.fft.autograd as afft
+from torch import nn
+from torch.autograd import Variable
+
 
 class Spectrum(nn.Module):
     def __init__(self, nonlin="logplus1"):
         nn.Module.__init__(self)
         self.fft2d = afft.Fft2d()
         self.nonlin = nonlin
+
     def forward(self, x):
         y = Variable(torch.zeros(x.size()).cuda())
         #print type(x), type(y)
@@ -38,5 +29,6 @@ class Spectrum(nn.Module):
             return torch.mag ** .5
         else:
             raise Exception("{}: unknown nonlinearity".format(self.nonlin))
+
     def __repr__(self):
         return "Spectrum"
